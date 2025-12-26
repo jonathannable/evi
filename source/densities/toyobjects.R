@@ -48,7 +48,7 @@ DonutPotential <- R6Class("DonutPotential",
 )
 
 # 
-# Banana Potential ----
+# Banana Potential / Rosenbrock ----
 # 
 
 BananaPotential <- R6Class("BananaPotential",

@@ -1,10 +1,9 @@
 library(torch)
 library(R6)
-library(tidyverse)
+library(ggplot2)
 library(gridExtra)
 
-source("./stop_rules.R")
-source("./particles.R")
+
 source("./evi_solver.R")
 source("./densities/toyobjects.R")
 source("./plotting.R")
@@ -22,12 +21,13 @@ simple_target_func <- function(x) {
   0.5 * torch_sum(x^2, dim = 2)
 }
 
-# 2. Pick the -log(density)/potential to use 
+
 # Note: EVISolver can take an R6Object or a function like above
 # We can also create a small wrapper function to call $compute()
-# And evaluate the R6Objects directly
+# And evaluate the R6Objects directly: for example
 # target_func <- function(x) gmm_potential$compute(x)
 
+# Setup for Gaussian Mixture Model with 3 distinct modes
 means_triangle <- matrix(c(
   0,  2.0,   
   -2, -1.5,  
@@ -36,13 +36,15 @@ means_triangle <- matrix(c(
 
 target_func <- GMMPotential$new(means_triangle, stdev = 0.6)
 # target_func <- StarPotential$new()
-target_func <- BananaPotential$new()
+# target_func <- BananaPotential$new()
+
 # Setup Data ----
 N <- 200 # Particles
 D <- 2  # Parameters
-# Standard Normal initial data
-# We can offset
-x_init <- torch_randn(N, D) # + 5 
+
+
+# Standard Normal initial data/state
+x_init <- torch_randn(N, D) 
 
 
 # Define Kernel ----
@@ -73,24 +75,10 @@ solver <- EVISolver$new(
 #            optimizer = optim_rmsprop, 
 #            optimizer_config = list(lr = 0.01, alpha = 0.99))
 
-# evi_solver is a convenience method to skip calling $new
-solver <- evi_solver(
-  target_neg_log_prob = target_func,
-  kernel = gauss_kernel,
-  temp = 1.0,  # Higher temp = more spread out #I think this is not from the paper? where did I get this
-  tau = 1e-2    # Small tau - slow accurate movements, high friction: Large tau - big jumps faster convergence
-)
-
-# Define stop rules
-outer_stop_rules <- list(StopDisplacement$new(1e-5), StopEnergyPlateau$new())
 # Run ----
 cat("Starting EVI Optimization...\n")
-solver$fit(x_init, 
-           time_steps = 2000, 
-           inner_steps = 10,
-           optimizer = optim_adam, 
-           optimizer_config=list(lr=1e-3),
-           outer_stop_rules=outer_stop_rules)
+solver$fit(x_init, time_steps = 50, inner_steps = 100,
+           optimizer = optim_adam, optimizer_config=list(lr=1e-3))
 
 # Plots ----
 # Basic plot for 2d data
@@ -113,25 +101,3 @@ plot_pbvi_series(
   target_fn = solver$target_neg_log_prob
 )
 
-# These are KDE plots of the particles using ggplot
-# Similar to the plot_pbvi_* functions above
-ggplot(as.data.frame(final_x) ,aes(x=V1,y=V2))+geom_density_2d_filled()+geom_point()
-
-last_step <- length(solver$trajectory)-1
-trajectory_df <- lapply(c(1,10,50, last_step), function(i){
-  as.data.frame(solver$trajectory[[i]]) %>% 
-    setNames(c("x","y")) %>%
-    mutate(
-      label=paste("Time Step", i),
-      step=i
-    )
-  }) %>% bind_rows() %>% arrange(step)
-
-ggplot(trajectory_df, aes(x = x, y = y)) +
-  geom_density_2d_filled(contour_var = "density") + 
-  geom_point(color="lightblue", alpha = 0.1, size = 0.5)+
-  facet_wrap(~ step, ncol = 4)+theme(legend.position = "none")
-
-# not well tested
-analysis <- solver$get_posterior()
-analysis$summary()

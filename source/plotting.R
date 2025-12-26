@@ -4,7 +4,7 @@ library(gridExtra)
 
 # Helpers  ----
 
-# Turn potential/target/negative log-likelihood into Probability for plotting
+# Turn potential/target/negative log-likelihood into (unnormalized) probability for plotting
 get_prob_fn_from_potential <- function(potential_source) {
   
   # Check if the input is an R6 object from this library or a regular R function
@@ -19,7 +19,8 @@ get_prob_fn_from_potential <- function(potential_source) {
     }
     
     # convert to probability: p(x) ~ exp(-V(x))
-    # detach and convert to array for plotting logic
+    # detach  and convert to array for plotting logic
+    # detach removes it from the autograd graph
     v_arr <- as_array(v_val$detach())
     
     # subtract min for numerical stability in visualization 
